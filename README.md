@@ -24,12 +24,45 @@ npm run preview    # lokální náhled produkčního sestavení
 - Otevření jednoho souboru tlačítkem nebo přetažením do okna.
 - Formáty `.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp` přes [alphaTab](https://alphatab.net/docs/introduction/).
 - Zobrazení tabulatury, výběr zobrazené stopy a kurzor přehrávání.
+- Po načtení se vybere první kytarová stopa podle názvu (Lead Guitar, Electric Guitar, Acoustic Guitar, Guitar, Gtr, kytara apod.). Baskytara a bicí se vynechají. Pokud název neodpovídá, použije se první kytarový MIDI nástroj, jinak první stopa. Ruční přepínání zůstává dostupné.
 - Přehrát / pozastavit / zastavit, čas a rychlost 50–150 %.
 - Mezerník v tabulatuře přepíná přehrávání a pauzu. Oblast aktivuješ kliknutím nebo klávesou Tab; podržení mezerníku přehrávání opakovaně nepřepíná.
 - Vestavěná ukázka: vlastní čtyřtaktový riff v `public/examples/prvni-riff.gp`.
 - Chybové zprávy pro neplatné a prázdné soubory.
 
 Soubory se zpracovávají pouze v prohlížeči a po obnovení stránky se neuchovávají. Výběr stopy mění zobrazenou tabulaturu; přehrává se doprovod všech stop. Zvuk je syntetizovaný přes SoundFont, nejde o původní Guitar Pro RSE zvuk. Některé pokročilé efekty se mohou od Guitar Pro lišit.
+
+## Knihovna skladeb z items
+
+Každá skladba má vlastní složku pojmenovanou **Skupina - Písnička**. V seznamu se zobrazí pouze složky obsahující Guitar Pro tabulaturu. Kliknutím se načte tab, případné video a JSON konfigurace. Dostupné součásti jsou označené štítky TAB, VIDEO a JSON.
+
+```text
+items/
+  Rage Against The Machine - Killing in the name/
+    tab.gp           # povinný tab (také .gp3, .gp4, .gp5, .gpx)
+    video.mp4        # volitelné video
+    config.json      # volitelné nastavení z textarea přehrávače
+  Skupina - Další písnička/
+    tab.gp5          # může obsahovat jen tabulaturu
+```
+
+Jména souborů mohou být jiná; vybírá se první podporovaný soubor podle názvu. Přednost mají `tab.*`, `video.*` a `config.json`. Video podporuje `.mp4`, `.m4v`, `.webm`, `.mov`, `.ogv`, pokud jeho kodek umí prohlížeč. Soubory se párují pouze uvnitř stejné složky. Při změně skladby se předchozí video i offset vyčistí. Chybějící nebo neplatný JSON nezablokuje načtení tabu; neplatné nastavení zobrazí upozornění a použijí se výchozí hodnoty.
+
+Pro vytvoření `config.json` vyber skladbu, nastav přehrávač a ulož obsah textarea do její složky. Příklad pro lokální video:
+
+```json
+{
+  "version": 4,
+  "source": "local",
+  "tabFile": "Rage Against The Machine - Killing in the name/tab.gp",
+  "mediaFile": "video.mp4",
+  "offsetSeconds": -2
+}
+```
+
+Konfigurace může místo lokálního videa zvolit `source: "youtube"` s `videoId`, nebo samotný zvuk tabu přes `source: "synth"` bez `mediaFile` a `videoId`. Není-li JSON, skladba s videem použije toto video s nulovým offsetem, skladba bez videa syntetický zvuk TAB. Pokud JSON žádá lokální video a soubor chybí, použije se syntetický zvuk a zobrazí se informace.
+
+Po přidání souborů obnov stránku; pro produkční verzi spusť znovu `npm run build`. Vite zahrne soubory z `items` do výsledného sestavení, takže knihovna funguje i bez backendu.
 
 ## Synchronizace videa podle tabulatury
 
@@ -44,7 +77,7 @@ Platí `čas videa = čas TAB + offset` (čas TAB je hudební čas skladby, nez�
 - Kliknutí na tón posune video podle času tónu; pokud video ještě nemá začít, zůstane na nule.
 - Změna tempa mění rychlost obou přehrávačů; offset zůstává v sekundách skladby.
 
-Otevři GP soubor a zvol lokální video tlačítkem **Načíst video ze souboru**, nebo **Použít Killing In The Name z repozitáře**. Vlastní soubor se otevře přes blob URL bez odesílání na server. Přidaný MP4 se zahrne i do produkčního sestavení (přibližně 29 MB). Alternativně zadej YouTube URL a klikni na **Načíst video a použít jeho zvuk**; parametry playlistu se ignorují. V režimu videa je syntetický zvuk TAB ztlumený. Zpět jej zapneš volbou **Zvuk tabulatury**.
+Vyber skladbu z knihovny, případně otevři GP soubor a vlastní video tlačítkem **Načíst video ze souboru**. Vlastní soubor se otevře přes blob URL bez odesílání na server. Video knihovny se zahrne i do produkčního sestavení. Alternativně zadej YouTube URL a klikni na **Načíst video a použít jeho zvuk**; parametry playlistu se ignorují. V režimu videa je syntetický zvuk TAB ztlumený. Zpět jej zapneš volbou **Zvuk tabulatury**.
 
 Video se průběžně srovnává s TAB, včetně opravy výraznějšího rozcházení času. Ovládání přímo na videu nemění TAB: přehrávač se vrátí k času a tempu tabulatury. Při blokovaném autoplay TAB pokračuje; přehrávání videa lze zkusit znovu přes ovládání TAB. Dostupné rychlosti YouTube určuje konkrétní video. Lokální kodek musí podporovat prohlížeč.
 
@@ -52,13 +85,16 @@ Offset můžeš napsat s tečkou nebo čárkou (např. `-3.5`), případně ladi
 
 Nový JSON používá `version: 4` a `source: "local"` s `mediaFile`, nebo `source: "youtube"` s `videoId`. Starší verze 1 a 2 zachovají číselný offset; verze 3 se převede s opačným znaménkem, aby zachovala časové zarovnání.
 
-Výchozí YouTube video `bWXazVhlyxQ` při ověření vrátilo zákaz vložení (101/150). Pro něj můžeš použít přidaný MP4. Výchozí nahrávka je původní RATM, testovací GP5 je Leo Moracchioli cover; jediný offset neřeší odlišné tempo či aranž. Nastavení více synchronizačních bodů zatím není součástí aplikace.
+YouTube se vkládá přímo jako `<iframe src="https://www.youtube.com/embed/VIDEO_ID?...">` s `enablejsapi=1`, skutečným originem aplikace, povolením autoplay a `referrerpolicy="strict-origin-when-cross-origin"`. Ovládací lišta a klávesy YouTube jsou vypnuté; přehrávání řídí TAB přes IFrame API. Nastavení vychází z ověřeného iframe na [Songsterru](https://www.songsterr.com/a/wsa/rage-against-the-machine-killing-in-the-name-tab-s360/r9969427) a [oficiální dokumentace YouTube](https://developers.google.com/youtube/iframe_api_reference).
 
-`npm test` ověřuje převod času, čekání videa, pauzu, posuny zpět, stop, změnu rychlosti, opravu driftu, odmítnuté přehrávání a migraci JSON. Zahrnuje import testovacího GP5 v kořeni repozitáře. alphaTab používá vlastní syntezátor jako nezávislé hodiny; v režimu videa má nulovou hlasitost. Video je pouze následovník těchto hodin.
+Video `bWXazVhlyxQ` na Songsterru při kontrole hrálo, ale na lokální adrese aplikace stále vrátilo chybu vložení 101/150, i s přímým iframe. Nelze z toho usuzovat na obecný zákaz vložení na všech webech. V aplikaci můžeš použít MP4 z knihovny. Testovací video YouTube API `M7lc1UVf-VE` se v přímém iframe načetlo správně. Jediný offset neřeší rozdílné tempo či aranž tabu a videa. Nastavení více synchronizačních bodů zatím není součástí aplikace.
+
+`npm test` ověřuje skládání knihovny, převod času, čekání videa, pauzu, posuny zpět, stop, změnu rychlosti, opravu driftu, odmítnuté přehrávání a migraci JSON. Zahrnuje import Guitar Pro souboru z `items`. alphaTab používá vlastní syntezátor jako nezávislé hodiny; v režimu videa má nulovou hlasitost. Video je pouze následovník těchto hodin.
 
 ## Struktura
 
 - `src/main.ts` — načítání souborů, alphaTab a obsluha UI.
+- `src/library.ts` — katalog skladeb podle souborů v `items`.
 - `src/style.css` — responzivní vzhled a kurzory přehrávání.
 - `index.html` — přístupná HTML kostra v češtině.
 - `vite.config.ts` — oficiální alphaTab plugin pro workers a audio worklet.
@@ -82,3 +118,5 @@ Základ neobsahuje editor, ukládání úprav ani knihovnu skladeb.
 
 Prošel `npm run build` včetně kontroly TypeScriptu. V prohlížeči byl ověřen import ukázkového `.gp`, vykreslení, běžící přehrávání, pauza, zastavení a změna rychlosti. Parser také úspěšně načetl lokální `.gp5` s pěti stopami a 162 takty; u dvou bendů použil obecnou interpretaci. Automatické ověření systémového dialogu výběru souboru narazilo na timeout nástroje, drag & drop zbývá ověřit ručně.
 
+## Songster
+https://www.songsterr-downloader.com/

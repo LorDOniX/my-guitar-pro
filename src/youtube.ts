@@ -14,10 +14,6 @@ export interface YouTubePlayer {
 }
 
 interface YouTubeOptions {
-  videoId: string;
-  width: string;
-  height: string;
-  playerVars: { origin: string; playsinline: number; autoplay: number };
   events: {
     onReady(event: { target: YouTubePlayer }): void;
     onStateChange(event: { data: number }): void;
@@ -56,7 +52,30 @@ export function loadYouTubeApi(): Promise<void> {
   return apiPromise;
 }
 
-export function createYouTubePlayer(element: HTMLElement, options: YouTubeOptions): YouTubePlayer {
+export function youtubeEmbedUrl(videoId: string, origin: string): string {
+  const url = new URL(`https://www.youtube.com/embed/${parseVideoId(videoId)}`);
+  url.search = new URLSearchParams({
+    enablejsapi: '1', origin, autoplay: '0', playsinline: '1',
+    controls: '0', disablekb: '1', rel: '0', fs: '0',
+    cc_load_policy: '0', iv_load_policy: '3', start: '0',
+  }).toString();
+  return url.href;
+}
+
+export function createYouTubeIframe(videoId: string, origin: string): HTMLIFrameElement {
+  const frame = document.createElement('iframe');
+  frame.id = 'youtube-player';
+  frame.title = 'YouTube video';
+  frame.width = '640';
+  frame.height = '360';
+  frame.allow = 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share';
+  frame.allowFullscreen = true;
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.src = youtubeEmbedUrl(videoId, origin);
+  return frame;
+}
+
+export function createYouTubePlayer(element: HTMLIFrameElement, options: YouTubeOptions): YouTubePlayer {
   if (!window.YT?.Player) throw new Error('YouTube API není připravené.');
   return new window.YT.Player(element, options);
 }
@@ -94,7 +113,11 @@ interface LocalSyncConfig extends SyncConfigBase {
   offsetSeconds: number;
 }
 
-export type SyncConfig = YouTubeSyncConfig | LocalSyncConfig;
+interface SynthSyncConfig extends SyncConfigBase {
+  source: 'synth';
+}
+
+export type SyncConfig = YouTubeSyncConfig | LocalSyncConfig | SynthSyncConfig;
 
 export function parseSyncConfig(text: string): SyncConfig {
   const value: unknown = JSON.parse(text);
@@ -102,6 +125,7 @@ export function parseSyncConfig(text: string): SyncConfig {
   const config = value as Record<string, unknown>;
   if ((config.version === 3 || config.version === 4) && typeof config.tabFile === 'string' && typeof config.offsetSeconds === 'number' && Number.isFinite(config.offsetSeconds)) {
     const offset = config.version === 3 ? -config.offsetSeconds : config.offsetSeconds;
+    if (config.source === 'synth') return { version: 4, source: 'synth', tabFile: config.tabFile, offsetSeconds: offset };
     if (config.source === 'local' && typeof config.mediaFile === 'string' && config.mediaFile.length > 0) {
       return { version: 4, source: 'local', tabFile: config.tabFile, mediaFile: config.mediaFile, offsetSeconds: offset };
     }

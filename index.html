@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="theme-color" content="#202b29" />
     <meta name="description" content="Otevřete Guitar Pro soubor, prohlédněte si tabulaturu a zahrajte si s ní." />
     <title>My Guitar Pro — prostor pro hraní</title>
@@ -26,6 +27,11 @@
       <main id="drop-zone">
         <header class="topbar"><span>PRACOVNÍ PROSTOR</span><span class="version">První edice <span>v0.1</span></span></header>
         <section class="workspace">
+          <section class="library-panel" aria-labelledby="library-title">
+            <div class="library-heading"><h2 id="library-title">Knihovna skladeb</h2><span id="library-count"></span></div>
+            <div id="library-list" class="library-list" role="list"></div>
+            <p id="library-status" class="sync-help" role="status" aria-live="polite">Vyber skladbu pro načtení tabulatury a dostupného videa i nastavení.</p>
+          </section>
           <div class="score-heading"><div><span class="eyebrow">TABULATURA</span><h2 id="song-title">Co si dnes zahraješ?</h2><p id="song-subtitle">Tvá další skladba začíná tady.</p></div><span class="format-badge">GUITAR PRO</span></div>
           <div class="transport" aria-label="Ovládání přehrávání">
             <button id="play" class="button play-button" disabled>▶ Přehrát</button>
@@ -43,7 +49,6 @@
                 </label>
                 <div class="local-video-actions">
                   <button id="open-local-video" class="button outline">Načíst video ze souboru</button>
-                  <button id="open-repo-video" class="button outline">Použít Killing In The Name z repozitáře</button>
                   <input id="local-video-input" type="file" accept="video/*,.mp4,.m4v,.webm" hidden />
                 </div>
                 <p id="local-video-name" class="sync-help">Lokální video zůstává v prohlížeči.</p>

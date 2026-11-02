@@ -1,8 +1,10 @@
 import * as alphaTab from '@coderline/alphatab';
 import './style.css';
-import { createYouTubePlayer, loadYouTubeApi, parseOffsetInput, parseSyncConfig, parseVideoId, type YouTubePlayer } from './youtube';
+import { createYouTubeIframe, createYouTubePlayer, loadYouTubeApi, parseOffsetInput, parseSyncConfig, parseVideoId, type SyncConfig, type YouTubePlayer } from './youtube';
 import { createLocalVideoPlayer } from './local-video';
 import { createVideoFollower } from './video-follower';
+import { preferredGuitarTrackIndex } from './track-selection';
+import { buildLibrary, type LibraryItem } from './library';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -27,8 +29,12 @@ const connectButton = element<HTMLButtonElement>('connect-youtube');
 const alignStart = element<HTMLButtonElement>('align-start');
 const localVideo = element<HTMLVideoElement>('local-video');
 const localInput = element<HTMLInputElement>('local-video-input');
-const repoVideoName = '2011-03-27 Rage Against The Machine - Killing In The Name (Official HD Video).mp4';
-const repoVideoUrl = new URL('../2011-03-27 Rage Against The Machine - Killing In The Name (Official HD Video).mp4', import.meta.url).href;
+const libraryItems = buildLibrary(import.meta.glob<string>([
+  '../items/**/*.{gp,gp3,gp4,gp5,gpx,mp4,m4v,webm,mov,ogv,json}',
+  '../items/**/*.{GP,GP3,GP4,GP5,GPX,MP4,M4V,WEBM,MOV,OGV,JSON}',
+], { eager: true, query: '?url', import: 'default' }));
+let currentLibraryItem: LibraryItem | undefined;
+let libraryLoading = false;
 let localReady = false;
 let localFileName = '';
 let localObjectUrl: string | undefined;
@@ -62,8 +68,10 @@ function videoMessage(text: string, error = false): void {
 
 function exportConfig(): void {
   try {
-    const config = audioSource.value === 'local'
-      ? { version: 4, source: 'local', tabFile: currentFile, mediaFile: localFileName || repoVideoName, offsetSeconds }
+    const config = audioSource.value === 'synth'
+      ? { version: 4, source: 'synth', tabFile: currentFile, offsetSeconds }
+      : audioSource.value === 'local'
+      ? { version: 4, source: 'local', tabFile: currentFile, mediaFile: localFileName, offsetSeconds }
       : { version: 4, source: 'youtube', tabFile: currentFile, videoId: connectedVideoId || parseVideoId(youtubeUrl.value), offsetSeconds };
     configOutput.value = JSON.stringify(config, null, 2);
   } catch { videoMessage('Pro výstup nastavení zadej platný YouTube odkaz.', true); }
@@ -149,10 +157,10 @@ async function connectVideo(): Promise<void> {
   videoMessage('Připojuji YouTube…');
   let readyTimeout = 0;
   try {
+    const mount = createYouTubeIframe(videoId, window.location.origin);
+    element('youtube-frame').replaceChildren(mount);
     await loadYouTubeApi();
     if (loadId !== videoLoadId) return;
-    const mount = document.createElement('div');
-    element('youtube-frame').replaceChildren(mount);
     const fail = (text: string) => {
       if (loadId !== videoLoadId) return;
       clearTimeout(readyTimeout);
@@ -165,8 +173,6 @@ async function connectVideo(): Promise<void> {
     };
     readyTimeout = window.setTimeout(() => fail('Video neodpovídá. Zkus Načíst video znovu nebo přepni na zvuk tabulatury.'), 20000);
     youtube = createYouTubePlayer(mount, {
-      videoId, width: '100%', height: '100%',
-      playerVars: { origin: window.location.origin, playsinline: 1, autoplay: 0 },
       events: {
         onReady(event) {
           if (loadId !== videoLoadId) return;
@@ -187,7 +193,7 @@ async function connectVideo(): Promise<void> {
           if (loadId === videoLoadId && usesYouTube()) syncVideo();
         },
         onError(event) {
-          const reasons: Record<number, string> = { 2: 'Neplatný odkaz na video.', 5: 'Prohlížeč nedokáže video přehrát.', 100: 'Video je nedostupné nebo soukromé.', 101: 'Autor zakázal vložení videa.', 150: 'Autor zakázal vložení videa.', 153: 'YouTube odmítl identitu přehrávače. Otevři aplikaci v běžném prohlížeči přes localhost.' };
+          const reasons: Record<number, string> = { 2: 'Neplatný odkaz na video.', 5: 'Prohlížeč nedokáže video přehrát.', 100: 'Video je nedostupné nebo soukromé.', 101: 'YouTube nepovolil vložení videa v tomto přehrávači.', 150: 'YouTube nepovolil vložení videa v tomto přehrávači.', 153: 'YouTube odmítl identitu přehrávače. Otevři aplikaci v běžném prohlížeči přes localhost.' };
           fail(`YouTube: ${reasons[event.data] || `chyba ${event.data}.`} Můžeš přepnout na zvuk tabulatury.`);
         },
         onAutoplayBlocked() { if (usesYouTube()) { videoPlaybackBlocked = true; videoMessage('Prohlížeč zablokoval video. Tabulatura pokračuje; zkus znovu její přehrávání.', true); } },
@@ -221,6 +227,11 @@ function updateControls(): void {
   track.disabled = speed.disabled = !hasScore || loading;
   alignStart.disabled = !usesExternalVideo() || !videoReady();
   for (const option of speed.options) option.disabled = usesYouTube() && youtubeReady && !youtube!.getAvailablePlaybackRates().includes(Number(option.value));
+  for (const button of element('library-list').querySelectorAll<HTMLButtonElement>('button')) {
+    button.disabled = loading || libraryLoading;
+    button.setAttribute('aria-current', String(button.dataset.itemId === currentLibraryItem?.id));
+  }
+  for (const id of ['open-file', 'choose-file', 'load-example']) element<HTMLButtonElement>(id).disabled = libraryLoading;
 }
 
 function formatTime(milliseconds: number): string {
@@ -246,6 +257,7 @@ function getApi(): alphaTab.AlphaTabApi {
     element('song-title').textContent = score.title || currentFile;
     element('song-subtitle').textContent = [score.artist, currentFile].filter(Boolean).join(' · ');
     track.replaceChildren(...score.tracks.map((item) => new Option(item.name || `Stopa ${item.index + 1}`, String(item.index))));
+    track.value = String(preferredGuitarTrackIndex(score.tracks));
     const rate = 1;
     speed.value = String(rate);
     api!.playbackSpeed = rate;
@@ -285,15 +297,15 @@ function getApi(): alphaTab.AlphaTabApi {
   return api;
 }
 
-async function openFile(file: File): Promise<void> {
-  if (loading) return;
+async function openFile(file: File, item?: LibraryItem): Promise<boolean> {
+  if (loading) return false;
   if (!/\.(gp[345]?|gpx)$/i.test(file.name)) {
     message('Vyber Guitar Pro soubor s příponou .gp, .gpx, .gp5, .gp4 nebo .gp3.', true);
-    return;
+    return false;
   }
   if (file.size === 0) {
     message('Soubor je prázdný. Vyber jiný Guitar Pro soubor.', true);
-    return;
+    return false;
   }
   loading = true;
   hasScore = false;
@@ -304,11 +316,14 @@ async function openFile(file: File): Promise<void> {
   message(`Načítám ${file.name}…`);
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    currentFile = file.name;
+    currentFile = item ? `${item.id}/${file.name}` : file.name;
+    currentLibraryItem = item;
     empty.hidden = true;
     viewport.hidden = false;
     const player = getApi();
-    if (!player.load(bytes)) throw new Error('Import souboru se nespustil.');
+    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, player.settings);
+    player.renderScore(score, [preferredGuitarTrackIndex(score.tracks)]);
+    return true;
   } catch (error) {
     console.error('File import:', error);
     loading = false;
@@ -316,14 +331,109 @@ async function openFile(file: File): Promise<void> {
     viewport.hidden = true;
     updateControls();
     message('Soubor se nepodařilo otevřít. Zkontroluj, že jde o platný Guitar Pro soubor.', true);
+    return false;
   }
+}
+
+function libraryMessage(text: string, error = false): void {
+  const output = element('library-status');
+  output.textContent = text;
+  output.classList.toggle('error', error);
+}
+
+async function fetchAsset(url: string): Promise<Response> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response;
+}
+
+function resetLibraryMedia(): void {
+  api?.stop();
+  clearInterval(videoTimer);
+  videoLoadId++;
+  youtube?.destroy();
+  youtube = undefined;
+  youtubeReady = false;
+  connectedVideoId = '';
+  connectButton.disabled = false;
+  localReady = false;
+  localPlayer.destroy();
+  if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+  localObjectUrl = undefined;
+  localFileName = '';
+  element('local-video-name').textContent = 'Lokální video zůstává v prohlížeči.';
+  element('youtube-frame').replaceChildren();
+  element('sync-clock').textContent = 'TAB 0:00 · Video —';
+  offsetSeconds = 0;
+  offsetInput.value = '0';
+  offsetInput.removeAttribute('aria-invalid');
+  audioSource.value = 'synth';
+  changeSource();
+}
+
+async function loadLibraryItem(item: LibraryItem): Promise<void> {
+  if (loading || libraryLoading) return;
+  libraryLoading = true;
+  updateControls();
+  element('library-list').setAttribute('aria-busy', 'true');
+  libraryMessage(`Načítám ${item.label}…`);
+  try {
+    const [tabResult, configResult] = await Promise.allSettled([
+      fetchAsset(item.tab.url).then((response) => response.blob()),
+      item.config ? fetchAsset(item.config.url).then((response) => response.text()).then(parseSyncConfig) : Promise.resolve(undefined),
+    ]);
+    if (tabResult.status === 'rejected') throw new Error('Tabulaturu se nepodařilo stáhnout.');
+    resetLibraryMedia();
+    if (!await openFile(new File([tabResult.value], item.tab.name), item)) throw new Error('Tabulaturu se nepodařilo otevřít.');
+    if (item.video) openLocalVideo(item.video.url, item.video.name);
+    if (configResult.status === 'fulfilled' && configResult.value) applyConfig(configResult.value, true);
+    exportConfig();
+    const warning = configResult.status === 'rejected';
+    libraryMessage(warning
+      ? `${item.label}: tabulatura je načtená, ale JSON nastavení je neplatné nebo nedostupné. Používám výchozí nastavení.`
+      : `${item.label} · načteno: TAB${item.video ? ' + video' : ''}${item.config ? ' + nastavení' : ''}`, warning);
+  } catch (error) {
+    libraryMessage(`${item.label}: ${error instanceof Error ? error.message : 'Načtení se nezdařilo.'}`, true);
+  } finally {
+    libraryLoading = false;
+    element('library-list').removeAttribute('aria-busy');
+    updateControls();
+  }
+}
+
+function renderLibrary(): void {
+  const count = libraryItems.length;
+  element('library-count').textContent = `${count} ${count === 1 ? 'skladba' : count >= 2 && count <= 4 ? 'skladby' : 'skladeb'}`;
+  const rows = libraryItems.map((item) => {
+    const row = document.createElement('div');
+    row.setAttribute('role', 'listitem');
+    const button = document.createElement('button');
+    button.className = 'library-item';
+    button.dataset.itemId = item.id;
+    const name = document.createElement('span');
+    name.className = 'library-name';
+    name.textContent = item.artist ? `${item.artist} — ${item.title}` : item.title;
+    const badges = document.createElement('span');
+    badges.className = 'library-badges';
+    for (const label of ['TAB', ...(item.video ? ['VIDEO'] : []), ...(item.config ? ['JSON'] : [])]) {
+      const badge = document.createElement('span');
+      badge.textContent = label;
+      badges.append(badge);
+    }
+    button.append(name, badges);
+    button.addEventListener('click', () => void loadLibraryItem(item));
+    row.append(button);
+    return row;
+  });
+  element('library-list').replaceChildren(...rows);
+  if (!rows.length) libraryMessage('Žádné skladby. Přidej do items složku „Skupina - Písnička“ obsahující Guitar Pro soubor.');
 }
 
 for (const id of ['open-file', 'choose-file']) {
   element(id).addEventListener('click', () => fileInput.click());
 }
 element('load-example').addEventListener('click', async () => {
-  if (loading) return;
+  if (loading || libraryLoading) return;
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}examples/prvni-riff.gp`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -334,7 +444,7 @@ element('load-example').addEventListener('click', async () => {
 });
 fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
-  if (file) void openFile(file);
+  if (file && !libraryLoading) void openFile(file);
   fileInput.value = '';
 });
 function togglePlayback(): void {
@@ -391,7 +501,6 @@ alignStart.addEventListener('click', () => {
   if (videoReady() && api) updateOffset(activeVideo()!.getCurrentTime() - api.timePosition * api.playbackSpeed / 1000);
 });
 element('open-local-video').addEventListener('click', () => localInput.click());
-element('open-repo-video').addEventListener('click', () => openLocalVideo(repoVideoUrl, repoVideoName));
 localInput.addEventListener('change', () => {
   const file = localInput.files?.[0];
   localInput.value = '';
@@ -403,31 +512,49 @@ localInput.addEventListener('change', () => {
   openLocalVideo(URL.createObjectURL(file), file.name, true);
 });
 element('export-sync').addEventListener('click', exportConfig);
+function applyConfig(config: SyncConfig, fromLibrary = false): void {
+  if (!fromLibrary && config.tabFile && currentFile && config.tabFile !== currentFile) throw new Error(`Nastavení patří k souboru „${config.tabFile}“. Nejdřív otevři tento soubor.`);
+  if (config.source === 'synth') {
+    updateOffset(config.offsetSeconds);
+    audioSource.value = 'synth';
+    changeSource();
+    return;
+  }
+  if (config.source === 'local') {
+    updateOffset(config.offsetSeconds);
+    const videoAsset = currentLibraryItem?.video;
+    if (videoAsset && (fromLibrary || config.mediaFile === videoAsset.name)) {
+      if (localFileName === videoAsset.name && localVideo.getAttribute('src') === videoAsset.url) {
+        audioSource.value = 'local';
+        changeSource();
+      } else openLocalVideo(videoAsset.url, videoAsset.name);
+    } else if (config.mediaFile === localFileName && localReady) {
+      audioSource.value = 'local';
+      changeSource();
+    } else if (fromLibrary) {
+      audioSource.value = 'synth';
+      changeSource();
+      videoMessage('Nastavení offsetu je načtené; ke skladbě chybí lokální video. Používám zvuk tabulatury.');
+    } else {
+      localReady = false;
+      localPlayer.destroy();
+      localFileName = config.mediaFile;
+      audioSource.value = 'local';
+      changeSource();
+      videoMessage(`Offset obnoven. Vyber video „${config.mediaFile}“ tlačítkem Načíst video ze souboru.`);
+    }
+    return;
+  }
+  youtubeUrl.value = `https://www.youtube.com/watch?v=${config.videoId}`;
+  updateOffset(config.offsetSeconds);
+  void connectVideo();
+}
 element('import-sync').addEventListener('click', () => {
   try {
-    const config = parseSyncConfig(configOutput.value);
-    if (config.tabFile && currentFile && config.tabFile !== currentFile) throw new Error(`Nastavení patří k souboru „${config.tabFile}“. Nejdřív otevři tento soubor.`);
-    if (config.source === 'local') {
-      updateOffset(config.offsetSeconds);
-      if (config.mediaFile === localFileName && localReady) {
-        audioSource.value = 'local';
-        changeSource();
-      } else if (config.mediaFile === repoVideoName) openLocalVideo(repoVideoUrl, repoVideoName);
-      else {
-        localReady = false;
-        localPlayer.destroy();
-        localFileName = config.mediaFile;
-        audioSource.value = 'local';
-        changeSource();
-        videoMessage(`Offset obnoven. Vyber video „${config.mediaFile}“ tlačítkem Načíst video ze souboru.`);
-      }
-      return;
-    }
-    youtubeUrl.value = `https://www.youtube.com/watch?v=${config.videoId}`;
-    updateOffset(config.offsetSeconds);
-    void connectVideo();
+    applyConfig(parseSyncConfig(configOutput.value));
   } catch (error) { videoMessage(error instanceof Error ? error.message : 'Neplatné nastavení.', true); }
 });
+renderLibrary();
 exportConfig();
 
 let dragDepth = 0;
@@ -440,7 +567,7 @@ document.addEventListener('dragenter', (event) => {
 document.addEventListener('dragover', (event) => {
   if (!event.dataTransfer?.types.includes('Files')) return;
   event.preventDefault();
-  event.dataTransfer.dropEffect = loading ? 'none' : 'copy';
+  event.dataTransfer.dropEffect = loading || libraryLoading ? 'none' : 'copy';
 });
 document.addEventListener('dragleave', (event) => {
   event.preventDefault();
@@ -451,6 +578,7 @@ document.addEventListener('drop', (event) => {
   dragDepth = 0;
   overlay.hidden = true;
   const files = event.dataTransfer?.files;
+  if (libraryLoading) return;
   if (!files?.length) return;
   if (files.length > 1) { message('Otevři prosím vždy jen jeden Guitar Pro soubor.', true); return; }
   void openFile(files[0]);
