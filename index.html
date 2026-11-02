@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#202b29" />
+    <meta name="description" content="Otevřete Guitar Pro soubor, prohlédněte si tabulaturu a zahrajte si s ní." />
+    <title>My Guitar Pro — prostor pro hraní</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <a class="brand" href="./" aria-label="My Guitar Pro – úvod"><span class="brand-icon">≋</span> my guitar pro<span class="brand-dot">.</span></a>
+        <div class="sidebar-content">
+          <span class="eyebrow">TVŮJ PROSTOR PRO HRANÍ</span>
+          <h1>Od souboru<br />k prvnímu tónu.</h1>
+          <p>Otevři tabulaturu, nalaď se na skladbu a hraj vlastním tempem.</p>
+          <button id="open-file" class="button primary"><span aria-hidden="true">＋</span> Načíst soubor</button>
+          <input id="file-input" type="file" accept=".gp,.gpx,.gp3,.gp4,.gp5" hidden />
+          <p class="file-types">Guitar Pro · GP3, GP4, GP5, GPX, GP</p>
+          <div class="sidebar-divider"></div>
+          <div class="steps"><span>01</span><p>Otevři svůj Guitar Pro soubor</p><span>02</span><p>Vyber nástroj a prohlédni tabulaturu</p><span>03</span><p>Spusť přehrávání a přidej se</p></div>
+        </div>
+        <div class="privacy"><span class="privacy-dot"></span> Soubory zůstávají v tvém prohlížeči.</div>
+      </aside>
+      <main id="drop-zone">
+        <header class="topbar"><span>PRACOVNÍ PROSTOR</span><span class="version">První edice <span>v0.1</span></span></header>
+        <section class="workspace">
+          <div class="score-heading"><div><span class="eyebrow">TABULATURA</span><h2 id="song-title">Co si dnes zahraješ?</h2><p id="song-subtitle">Tvá další skladba začíná tady.</p></div><span class="format-badge">GUITAR PRO</span></div>
+          <div class="transport" aria-label="Ovládání přehrávání">
+            <button id="play" class="button play-button" disabled>▶ Přehrát</button>
+            <button id="stop" class="button stop-button" aria-label="Zastavit a vrátit na začátek" title="Zastavit a vrátit na začátek" disabled>■</button>
+            <span id="time" class="time">0:00 / 0:00</span>
+            <div class="transport-options"><label>Stopa <select id="track" disabled><option>Žádná stopa</option></select></label><label>Tempo <select id="speed" disabled><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="1" selected>100 %</option><option value="1.25">125 %</option><option value="1.5">150 %</option></select></label></div>
+          </div>
+          <div id="status" class="status" role="status" aria-live="polite">Připraveno na tvůj soubor.</div>
+          <details class="youtube-panel" open>
+            <summary>Synchronizace s videem <span>Lokální soubor nebo YouTube</span></summary>
+            <div class="youtube-grid">
+              <div>
+                <label class="field">Zdroj přehrávání
+                  <select id="audio-source"><option value="synth">Zvuk tabulatury</option><option value="local">Lokální video (MP4)</option><option value="youtube">YouTube video</option></select>
+                </label>
+                <div class="local-video-actions">
+                  <button id="open-local-video" class="button outline">Načíst video ze souboru</button>
+                  <button id="open-repo-video" class="button outline">Použít Killing In The Name z repozitáře</button>
+                  <input id="local-video-input" type="file" accept="video/*,.mp4,.m4v,.webm" hidden />
+                </div>
+                <p id="local-video-name" class="sync-help">Lokální video zůstává v prohlížeči.</p>
+                <label class="field">Odkaz na YouTube
+                  <input id="youtube-url" type="text" value="https://www.youtube.com/watch?v=bWXazVhlyxQ" spellcheck="false" />
+                </label>
+                <button id="connect-youtube" class="button outline">Načíst video a použít jeho zvuk</button>
+                <label class="field offset-field">Offset v sekundách
+                  <span class="offset-controls"><button id="offset-minus" class="button" aria-label="Snížit offset o 0,1 sekundy">−0,1</button><input id="youtube-offset" type="text" inputmode="decimal" value="0" placeholder="např. -3.5" spellcheck="false" aria-label="Offset v sekundách" /><button id="offset-plus" class="button" aria-label="Zvýšit offset o 0,1 sekundy">+0,1</button></span>
+                </label>
+                <p class="sync-help">Čas řídí tabulatura, vždy od 0:00. Offset −2 s: video čeká a začne od nuly při TAB 0:02. Offset +2 s: video hraje od času 0:02 už při TAB 0:00. Přehrávání a tempo ovládej přes tabulaturu.</p>
+                <button id="align-start" class="example-button" disabled>Zarovnat aktuální čas videa s aktuálním časem TAB</button>
+                <div id="youtube-status" class="status" role="status" aria-live="polite">Video se připojí až po kliknutí na Načíst video.</div>
+              </div>
+              <div>
+                <div id="youtube-frame" class="youtube-frame"><div class="video-placeholder">YouTube video se zobrazí tady.<br />Mezerník v tabulatuře ovládá i video.</div></div>
+                <div id="local-video-frame" class="youtube-frame" hidden><video id="local-video" controls playsinline preload="metadata" aria-label="Lokální video"></video></div>
+                <p id="sync-clock" class="sync-help">Video — · TAB —</p>
+                <label class="field" for="sync-config">Nastavení pro příště (JSON — zkopíruj nebo sem vlož uložené nastavení)</label>
+                <textarea id="sync-config" rows="6" spellcheck="false"></textarea>
+                <div class="config-actions"><button id="export-sync" class="button outline">Aktualizovat výstup</button><button id="import-sync" class="button outline">Použít vložené nastavení</button></div>
+              </div>
+            </div>
+          </details>
+          <div id="empty-state" class="empty-state">
+            <div class="tab-illustration" aria-hidden="true"><span class="tab-label">TAB</span><div class="strings"><i></i><i></i><i></i><i></i><i></i><i></i><b class="note n1">3</b><b class="note n2">5</b><b class="note n3">7</b><b class="note n4">5</b></div><span class="illustration-plus">＋</span></div>
+            <h3>Pusť sem svou skladbu</h3>
+            <p>Přetáhni Guitar Pro soubor do tohoto okna<br />nebo ho vyber ze svého počítače.</p>
+            <button id="choose-file" class="button outline">Vybrat soubor <span aria-hidden="true">↗</span></button>
+            <span class="empty-hint">.gp · .gpx · .gp5 · .gp4 · .gp3</span>
+            <button id="load-example" class="example-button">Nebo vyzkoušej krátký ukázkový riff →</button>
+          </div>
+          <div id="score-viewport" class="score-viewport" role="region" aria-label="Tabulatura. Mezerníkem spustíš nebo pozastavíš přehrávání." aria-keyshortcuts="Space" tabindex="0" hidden><div id="score"></div></div>
+          <footer class="workspace-footer"><span><span class="small-dot"></span> Jen ty, nástroj a hudba.</span><a href="https://alphatab.net/" target="_blank" rel="noreferrer">Notace a zvuk od alphaTab ↗</a></footer>
+        </section>
+        <div id="drop-overlay" class="drop-overlay" hidden><span>↓</span><h2>Pusť soubor a začni hrát</h2><p>Otevřít Guitar Pro tabulaturu</p></div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

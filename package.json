@@ -1,0 +1,21 @@
+{
+  "name": "my-guitar-pro",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test scripts/video-follower.test.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coderline/alphatab": "^1.9.0"
+  },
+  "devDependencies": {
+    "@coderline/alphatab-vite": "^1.9.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
